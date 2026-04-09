@@ -425,7 +425,7 @@ export async function createScene()
 	const hk = new BABYLON.HavokPlugin(true, havokInstance);
 	scene.enablePhysics(new BABYLON.Vector3(0, -9.8, 0), hk);
 
-    var camera = createCamera(scene, canvas, 0, 0, 62)
+    var camera = createCamera(scene, canvas, 0, 0, 62);
 
     var light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
     light.intensity = 0.7;
