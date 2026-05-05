@@ -203,7 +203,12 @@ class Playground
                 scene.onBeforeRenderObservable.add(() =>
                 {
                     var rayStart = playerRoot.position;
-                    var rayEnd = playerRoot.position;
+                    var rayEnd = new BABYLON.Vector3
+                    (
+                        playerRoot.position.x,
+                        playerRoot.position.y - 0.5,
+                        playerRoot.position.z
+                    );
                     var rayRes = physicsEngine.raycast(rayStart, rayEnd);
 
                     if (rayRes.hasHit)
@@ -227,10 +232,10 @@ class Playground
                             const currentVel = playerAgg.body.getLinearVelocity();
                             playerAgg.body.setLinearVelocity( new BABYLON.Vector3(player.forward.x * playerSpeed, currentVel.y, 0));
                         }
-                        if (keyStatus[' '])
+                        if (keyStatus[' '] && rayRes.hasHit)
                         {
                             jumpAnim.start(true, 1, jumpAnim.from, jumpAnim.to, false);
-                            playerAgg.body.applyImpulse(new BABYLON.Vector3(0, 50, 0), player.getAbsolutePosition());
+                            playerAgg.body.applyImpulse(new BABYLON.Vector3(-50, 450, 0), player.getAbsolutePosition());
                         }
                     }
                     else
