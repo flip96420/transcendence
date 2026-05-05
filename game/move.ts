@@ -10,7 +10,7 @@ class Playground
         scene.actionManager = new BABYLON.ActionManager(scene);
 
         // Setting up physics
-        try 
+        try
         {
             const havokInstance = await HavokPhysics();
             const hk = new BABYLON.HavokPlugin(true, havokInstance);
@@ -21,8 +21,10 @@ class Playground
             console.warn("Babylon physics plugin failed to initialize. Physics features will be disabled.", error);
         }
 
+        const physicsEngine = scene.getPhysicsEngine();
+
         // Lighting
-        let light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
+        var light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
         light.intensity = 0.7;
 
         // Camera
@@ -34,6 +36,9 @@ class Playground
         {
             scene.render();
         });
+
+        // const ground = BABYLON.CreateGround("ground", { width: 50, height: 50 });
+        // const groundAgg = new BABYLON.PhysicsAggregate(ground, BABYLON.PhysicsShapeType.BOX, { mass: 0, friction: 0.8 }, scene);
 
         let array =
         [
@@ -138,85 +143,39 @@ class Playground
         const ground = BABYLON.MeshBuilder.ExtrudePolygon( "ground", { shape: array, depth: 5 }, scene );
         ground.rotation.x = -Math.PI / 2;
         ground.position = new BABYLON.Vector3(-62, 0, -5 / 2);
-        const groundAggregate = new BABYLON.PhysicsAggregate( ground, BABYLON.PhysicsShapeType.MESH, { mass: 0, friction: 1, restitution: 0 }, scene );
+        const groundAggregate = new BABYLON.PhysicsAggregate( ground, BABYLON.PhysicsShapeType.MESH, { mass: 1, friction: 1, restitution: 0 }, scene );
+        groundAggregate.body.setMotionType(BABYLON.PhysicsMotionType.STATIC);
 
         const loadModel = async () =>
         {
             BABYLON.ImportMeshAsync("https://assets.babylonjs.com/meshes/HVGirl.glb", scene).then(function (model)
             {
-                let pos = new BABYLON.Vector3(0, 0, 0);
-
-                // Set collision-shape
-                let h = 1;
-                let r = 0.25;
-                let capsule = BABYLON.MeshBuilder.CreateCapsule("CharacterDisplay", { height: h, radius: r }, scene);
-                capsule.position = pos;
-                capsule.isVisible = true;
-
-                // Set player model and lock on camera to the player/target
-                let player = model.meshes[0];
-                player.parent = capsule;
-                player.position = pos;
+                // Setting player model and lock on camera to the player/target
+                var player = model.meshes[0];
+                const playerRoot = new BABYLON.TransformNode("playerRoot", scene);
+                player.parent = playerRoot;
+                playerRoot.position = new BABYLON.Vector3(0, 20, 0);
                 player.scaling.setAll(0.1);
                 camera.setTarget(player);
 
-                // Set character controller
-                let characterController = new BABYLON.PhysicsCharacterController(capsule.position, { capsuleHeight: h, capsuleRadius: r }, scene);
+                const playerAgg = new BABYLON.PhysicsAggregate
+                (
+                    playerRoot,
+                    BABYLON.PhysicsShapeType.CAPSULE,
+                    { mass: 1, friction: 0.9, restitution: 0.1, radius: 0.25 },
+                    scene
+                );
+                playerAgg.body.setMassProperties({ inertia: new BABYLON.Vector3(0, 0, 0) });
+                playerAgg.body.setMotionType(BABYLON.PhysicsMotionType.DYNAMIC);
 
                 // Set animations
                 const idleAnim = scene.getAnimationGroupByName("Idle");
                 const walkAnim = scene.getAnimationGroupByName("Walking");
                 const jumpAnim = scene.getAnimationGroupByName("Samba");
-                
-                // Player-Attributes
+
+                // attributes
                 const   playerSpeed = 0.65;
-                let     playerOrientation = BABYLON.Quaternion.Identity();
-                let     playerGravity = new BABYLON.Vector3(0, -12, 0);
-                let     jumpHeight = 1.5;
-                let     wantJump = false;
                 let     moving = false;
-                var     inputDirection = new BABYLON.Vector3(0, 0, 0);
-                let     forwardLocalSpace = new BABYLON.Vector3(0, 0, 1);
-
-                // Calculate velocity
-                var getDesiredVelocity = function(dt, supportInfo, orientation, currVelocity)
-                {
-                    let upWorld = playerGravity.normalizeToNew();
-                    let forwardWorld = forwardLocalSpace.applyRotationQuaternion(orientation);
-                    let velocity = new BABYLON.Vector3(0, 0, 0);
-
-                    if (supportInfo.supportedState == BABYLON.CharacterSupportedState.SUPPORTED)
-                    {
-                        let desiredVelocity = inputDirection.scale(playerSpeed).applyRotationQuaternion(orientation);
-                        velocity = characterController.calculateMovement
-                        (
-                            dt,
-                            forwardWorld,
-                            supportInfo.averageSurfaceNormal,
-                            currVelocity,
-                            supportInfo.averageSurfaceVelocity,
-                            desiredVelocity,
-                            upWorld
-                        );
-                        velocity.addInPlace(supportInfo.averageSurfaceVelocity);
-                    }
-                    else if (supportInfo.supportedState != BABYLON.CharacterSupportedState.SUPPORTED)
-                    {
-                        let desiredVelocity = inputDirection.scale(playerSpeed).applyRotationQuaternion(orientation);
-                        velocity = characterController.calculateMovement
-                        (
-                            dt,
-                            forwardWorld,
-                            upWorld,
-                            currVelocity,
-                            BABYLON.Vector3.ZeroReadOnly,
-                            desiredVelocity,
-                            upWorld
-                        );
-                        velocity.addInPlace(playerGravity.scale(dt));
-                    }
-                    return (velocity);
-                }
 
                 // Set input keys for left, right and jump
                 let keyStatus =
@@ -235,7 +194,7 @@ class Playground
                         toggle = true;
                     else
                         toggle = false;
-                    
+
                     let key = keyInfo.event.key;
                     if (key in keyStatus)
                         keyStatus[key] = toggle;
@@ -243,9 +202,17 @@ class Playground
 
                 scene.onBeforeRenderObservable.add(() =>
                 {
-                    const dt = scene.getEngine().getDeltaTime();
-                    let support = characterController.checkSupport(dt, new BABYLON.Vector3(0, -1, 0));
-                    
+                    var rayStart = playerRoot.position;
+                    var rayEnd = playerRoot.position;
+                    var rayRes = physicsEngine.raycast(rayStart, rayEnd);
+
+                    if (rayRes.hasHit)
+                    {
+                        console.log("Collision at: ", rayRes.hitPointWorld);
+                        console.log("Player position at: ", playerRoot.position);
+                    }
+
+
                     if (keyStatus['a'] || keyStatus['d'] || keyStatus[' '])
                     {
                         moving = true;
@@ -253,25 +220,17 @@ class Playground
                         {
                             walkAnim.start(true, 1, walkAnim.from, walkAnim.to, false);
                             if (keyStatus['a'])
-                            {
-                                playerOrientation = BABYLON.Quaternion.RotationAxis(BABYLON.Axis.Y, (3 * Math.PI) / 2);
-                                inputDirection.x = -1;
-                            }
+                                player.rotationQuaternion = BABYLON.Quaternion.RotationAxis(BABYLON.Axis.Y, (3 * Math.PI) / 2);
                             if (keyStatus['d'])
-                            {
-                                playerOrientation = BABYLON.Quaternion.RotationAxis(BABYLON.Axis.Y, Math.PI / 2);
-                                inputDirection.x = 1;
-                            }
-                            
-                            player.rotationQuaternion = playerOrientation;
+                                player.rotationQuaternion = BABYLON.Quaternion.RotationAxis(BABYLON.Axis.Y, Math.PI / 2);
 
-                            let desiredVelocity = getDesiredVelocity(dt, support, playerOrientation, characterController.getVelocity());
-                            characterController.setVelocity(desiredVelocity);
+                            const currentVel = playerAgg.body.getLinearVelocity();
+                            playerAgg.body.setLinearVelocity( new BABYLON.Vector3(player.forward.x * playerSpeed, currentVel.y, 0));
                         }
                         if (keyStatus[' '])
                         {
                             jumpAnim.start(true, 1, jumpAnim.from, jumpAnim.to, false);
-                            // playerAgg.body.applyImpulse(new BABYLON.Vector3(0, 10, 0), player.getAbsolutePosition());
+                            playerAgg.body.applyImpulse(new BABYLON.Vector3(0, 50, 0), player.getAbsolutePosition());
                         }
                     }
                     else
@@ -281,11 +240,9 @@ class Playground
                         walkAnim.stop();
                         jumpAnim.stop();
 
-                        characterController.setVelocity(new BABYLON.Vector3(0, characterController.getVelocity().y, 0));
+                        const currentVel = playerAgg.body.getLinearVelocity();
+                        playerAgg.body.setLinearVelocity(new BABYLON.Vector3(0, currentVel.y, 0));
                     }
-
-                    characterController.integrate(dt, support, playerGravity);
-                    // capsule.position.copyFrom(characterController.getPosition());
                 });
             });
         }
