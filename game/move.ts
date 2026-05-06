@@ -1,5 +1,36 @@
 import HavokPhysics from "@babylonjs/havok";
 
+function wrapper(scene) {
+    let start = Date.now();
+    const action = new BABYLON.ExecuteCodeAction(
+        {
+            trigger: BABYLON.ActionManager.OnEveryFrameTrigger
+        }, () => {
+            if (Date.now() > start + 5000) {
+                console.log("5 Seconds have passed");
+                start = Date.now();
+            }
+        }
+    )
+
+    scene.actionManager.registerAction(action);
+    scene.actionManager.unregisterAction(action);
+}
+5 Seconds ended, Wed May 06 2026 18:11:45 GMT+0200 (Central European Summer Time) > Wed May 06 2026 18:11:45 GMT+0200 (Central European Summer Time)5000 index.js:13:13
+
+export function waitTime(duration)
+{
+    const start = Date.now(); 
+    const end = start + duration * 1000;
+
+    console.log(`Start: ${start} End: ${end}`);
+    while (start + duration * 1000 > Date.now())
+    {
+        console.log("Time left: ", end - start, " ms");
+    }
+    console.log(`5 Seconds ended, ${start} > ${end}`)
+}
+
 class Playground
 {
     static async CreateScene()
@@ -8,6 +39,7 @@ class Playground
         const engine = new BABYLON.Engine(canvas, true);
         const scene = new BABYLON.Scene(engine);
         scene.actionManager = new BABYLON.ActionManager(scene);
+        wrapper(scene);
 
         // Setting up physics
         try
@@ -176,6 +208,7 @@ class Playground
                 // attributes
                 const   playerSpeed = 0.65;
                 let     moving = false;
+                let     inAir = true;
 
                 // Set input keys for left, right and jump
                 let keyStatus =
@@ -213,15 +246,16 @@ class Playground
 
                     if (rayRes.hasHit)
                     {
-                        console.log("Collision at: ", rayRes.hitPointWorld);
-                        console.log("Player position at: ", playerRoot.position);
+                        //console.log("Collision at: ", rayRes.hitPointWorld);
+                        //console.log("Player position at: ", playerRoot.position);
+                        inAir = false;
                     }
 
 
-                    if (keyStatus['a'] || keyStatus['d'] || keyStatus[' '])
+                    if (keyStatus['a'] || keyStatus['d'] || keyStatus['w'] || keyStatus[' '])
                     {
                         moving = true;
-                        if (keyStatus['a'] || keyStatus['d'])
+                        if ((keyStatus['a'] || keyStatus['d']) && !keyStatus['w'] && !keyStatus[' '] && !inAir)
                         {
                             walkAnim.start(true, 1, walkAnim.from, walkAnim.to, false);
                             if (keyStatus['a'])
@@ -232,10 +266,14 @@ class Playground
                             const currentVel = playerAgg.body.getLinearVelocity();
                             playerAgg.body.setLinearVelocity( new BABYLON.Vector3(player.forward.x * playerSpeed, currentVel.y, 0));
                         }
-                        if (keyStatus[' '] && rayRes.hasHit)
+                        if (rayRes.hasHit && (keyStatus['w'] || keyStatus[' ']))
                         {
                             jumpAnim.start(true, 1, jumpAnim.from, jumpAnim.to, false);
-                            playerAgg.body.applyImpulse(new BABYLON.Vector3(-50, 450, 0), player.getAbsolutePosition());
+                            if (keyStatus['w'])
+                                playerAgg.body.applyImpulse(new BABYLON.Vector3(player.forward.x * -40, 460, 0), player.getAbsolutePosition());
+                            else if (keyStatus[' '])
+                                playerAgg.body.applyImpulse(new BABYLON.Vector3(player.forward.x * 70, 100, 0), player.getAbsolutePosition());
+                            inAir = true;
                         }
                     }
                     else
@@ -243,11 +281,12 @@ class Playground
                         moving = false;
                         idleAnim.start(true, 1, idleAnim.from, idleAnim.to, false);
                         walkAnim.stop();
-                        jumpAnim.stop();
 
                         const currentVel = playerAgg.body.getLinearVelocity();
                         playerAgg.body.setLinearVelocity(new BABYLON.Vector3(0, currentVel.y, 0));
                     }
+                    if (!inAir)
+                        jumpAnim.stop();
                 });
             });
         }
