@@ -1,34 +1,20 @@
 import HavokPhysics from "@babylonjs/havok";
 
-function wrapper(scene) {
+function wrapper(scene)
+{
     let start = Date.now();
-    const action = new BABYLON.ExecuteCodeAction(
+
+    const action = new BABYLON.ExecuteCodeAction({ trigger: BABYLON.ActionManager.OnEveryFrameTrigger }, () => 
+    {
+        if (Date.now() > start + 5000)
         {
-            trigger: BABYLON.ActionManager.OnEveryFrameTrigger
-        }, () => {
-            if (Date.now() > start + 5000) {
-                console.log("5 Seconds have passed");
-                start = Date.now();
-            }
+            console.log("5 Seconds have passed");
+            start = Date.now();
         }
-    )
+    });
 
     scene.actionManager.registerAction(action);
-    scene.actionManager.unregisterAction(action);
-}
-5 Seconds ended, Wed May 06 2026 18:11:45 GMT+0200 (Central European Summer Time) > Wed May 06 2026 18:11:45 GMT+0200 (Central European Summer Time)5000 index.js:13:13
-
-export function waitTime(duration)
-{
-    const start = Date.now(); 
-    const end = start + duration * 1000;
-
-    console.log(`Start: ${start} End: ${end}`);
-    while (start + duration * 1000 > Date.now())
-    {
-        console.log("Time left: ", end - start, " ms");
-    }
-    console.log(`5 Seconds ended, ${start} > ${end}`)
+    // scene.actionManager.unregisterAction(action);
 }
 
 class Playground
@@ -39,7 +25,7 @@ class Playground
         const engine = new BABYLON.Engine(canvas, true);
         const scene = new BABYLON.Scene(engine);
         scene.actionManager = new BABYLON.ActionManager(scene);
-        wrapper(scene);
+        // wrapper(scene);
 
         // Setting up physics
         try
@@ -68,9 +54,6 @@ class Playground
         {
             scene.render();
         });
-
-        // const ground = BABYLON.CreateGround("ground", { width: 50, height: 50 });
-        // const groundAgg = new BABYLON.PhysicsAggregate(ground, BABYLON.PhysicsShapeType.BOX, { mass: 0, friction: 0.8 }, scene);
 
         let array =
         [
@@ -175,8 +158,22 @@ class Playground
         const ground = BABYLON.MeshBuilder.ExtrudePolygon( "ground", { shape: array, depth: 5 }, scene );
         ground.rotation.x = -Math.PI / 2;
         ground.position = new BABYLON.Vector3(-62, 0, -5 / 2);
-        const groundAggregate = new BABYLON.PhysicsAggregate( ground, BABYLON.PhysicsShapeType.MESH, { mass: 1, friction: 1, restitution: 0 }, scene );
+        const groundAggregate = new BABYLON.PhysicsAggregate( ground, BABYLON.PhysicsShapeType.MESH, { mass: 1, friction: 0.8, restitution: 0 }, scene );
         groundAggregate.body.setMotionType(BABYLON.PhysicsMotionType.STATIC);
+
+        let     canJump = true;
+        let     secUntilNextJump = 2;
+        let     start = Date.now();
+
+        const timer = new BABYLON.ExecuteCodeAction({ trigger: BABYLON.ActionManager.OnEveryFrameTrigger }, () => 
+        {
+            if (Date.now() > start + (secUntilNextJump * 1000))
+            {
+                console.log("5 Seconds have passed");
+                start = Date.now();
+                canJump = true;
+            }
+        });
 
         const loadModel = async () =>
         {
@@ -194,7 +191,7 @@ class Playground
                 (
                     playerRoot,
                     BABYLON.PhysicsShapeType.CAPSULE,
-                    { mass: 1, friction: 0.9, restitution: 0.1, radius: 0.25 },
+                    { mass: 1, friction: 0.8, restitution: 0, radius: 0.25 },
                     scene
                 );
                 playerAgg.body.setMassProperties({ inertia: new BABYLON.Vector3(0, 0, 0) });
@@ -249,13 +246,23 @@ class Playground
                         //console.log("Collision at: ", rayRes.hitPointWorld);
                         //console.log("Player position at: ", playerRoot.position);
                         inAir = false;
+                        jumpAnim.stop();
+                        scene.actionManager.registerAction(timer);
                     }
+                    else
+                    {
+                        inAir = true;
+                        canJump = false;
+                        jumpAnim.start(true, 1, jumpAnim.from, jumpAnim.to, false);
+                    }
+                    if (canJump)
+                        scene.actionManager.unregisterAction(timer);
 
 
                     if (keyStatus['a'] || keyStatus['d'] || keyStatus['w'] || keyStatus[' '])
                     {
                         moving = true;
-                        if ((keyStatus['a'] || keyStatus['d']) && !keyStatus['w'] && !keyStatus[' '] && !inAir)
+                        if ((keyStatus['a'] || keyStatus['d']) && !inAir)
                         {
                             walkAnim.start(true, 1, walkAnim.from, walkAnim.to, false);
                             if (keyStatus['a'])
@@ -264,16 +271,14 @@ class Playground
                                 player.rotationQuaternion = BABYLON.Quaternion.RotationAxis(BABYLON.Axis.Y, Math.PI / 2);
 
                             const currentVel = playerAgg.body.getLinearVelocity();
-                            playerAgg.body.setLinearVelocity( new BABYLON.Vector3(player.forward.x * playerSpeed, currentVel.y, 0));
+                            playerAgg.body.setLinearVelocity( new BABYLON.Vector3(player.forward.x * playerSpeed, currentVel.y, player.forward.z * playerSpeed));
                         }
-                        if (rayRes.hasHit && (keyStatus['w'] || keyStatus[' ']))
+                        if (canJump && !inAir && (keyStatus['w'] || keyStatus[' ']))
                         {
-                            jumpAnim.start(true, 1, jumpAnim.from, jumpAnim.to, false);
                             if (keyStatus['w'])
-                                playerAgg.body.applyImpulse(new BABYLON.Vector3(player.forward.x * -40, 460, 0), player.getAbsolutePosition());
+                                playerAgg.body.applyImpulse(new BABYLON.Vector3(player.forward.x * -50, 460, 0), player.getAbsolutePosition());
                             else if (keyStatus[' '])
                                 playerAgg.body.applyImpulse(new BABYLON.Vector3(player.forward.x * 70, 100, 0), player.getAbsolutePosition());
-                            inAir = true;
                         }
                     }
                     else
@@ -285,8 +290,6 @@ class Playground
                         const currentVel = playerAgg.body.getLinearVelocity();
                         playerAgg.body.setLinearVelocity(new BABYLON.Vector3(0, currentVel.y, 0));
                     }
-                    if (!inAir)
-                        jumpAnim.stop();
                 });
             });
         }
