@@ -273,8 +273,11 @@ class Playground
                             const currentVel = playerAgg.body.getLinearVelocity();
                             playerAgg.body.setLinearVelocity( new BABYLON.Vector3(player.forward.x * playerSpeed, currentVel.y, player.forward.z * playerSpeed));
                         }
+                        else
+                            walkAnim.stop();
                         if (canJump && !inAir && (keyStatus['w'] || keyStatus[' ']))
                         {
+                            walkAnim.stop();
                             if (keyStatus['w'])
                                 playerAgg.body.applyImpulse(new BABYLON.Vector3(player.forward.x * -50, 460, 0), player.getAbsolutePosition());
                             else if (keyStatus[' '])
@@ -283,9 +286,9 @@ class Playground
                     }
                     else
                     {
+                        walkAnim.stop();
                         moving = false;
                         idleAnim.start(true, 1, idleAnim.from, idleAnim.to, false);
-                        walkAnim.stop();
 
                         const currentVel = playerAgg.body.getLinearVelocity();
                         playerAgg.body.setLinearVelocity(new BABYLON.Vector3(0, currentVel.y, 0));
